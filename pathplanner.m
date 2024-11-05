@@ -4,7 +4,7 @@ launchPoint = [39.65, -87.75, 0];  % (latitude, longitude, altitude)
 searchArea = [
     39.6, -87.7;
     39.55, -87.7;
-    39.55, -87.5;
+    39.59, -87.5;
     39.6, -87.5
 ];  
 
@@ -23,14 +23,14 @@ ReferenceHeight = UAVHeight;     % UAV flight height
 
 % visualize the search area on a map
 fig = figure;
-g = geoaxes(fig, 'Basemap', 'satellite');
+g = geoaxes(fig, Basemap='satellite');
 geolimits([launchPoint(1) - 0.01, launchPoint(1) + 0.01], [launchPoint(2) - 0.01, launchPoint(2) + 0.01]);
 show(cs, 'Parent', g);
 
 % define specific sweep angles for optimal coverage
 setCoveragePattern(cs, 1, 'SweepAngle', 85);
 
-cp = uavCoveragePlanner(cs, 'Solver', 'Exhaustive');
+cp = uavCoveragePlanner(cs, 'Solver', 'MinTraversal');
 
 % plan and visualize coverage path from launch point
 [waypoints, solution] = plan(cp, launchPoint);
