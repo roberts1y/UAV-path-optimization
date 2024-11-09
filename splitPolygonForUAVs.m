@@ -1,68 +1,62 @@
-function partitions = splitPolygonForUAVs(searchArea, numUAVs)
-    % Ensure the search area is a valid polygon with at least three points
-    if size(searchArea, 1) < 3
-        error('Search area must be a polygon with at least three corners.');
-    end
+function partitions = splitPolygonForUAVs(polygonCoords, launchPoint, numUAVs)
+    % Splits a polygon into `numUAVs` equal radial partitions from the launch point.
+    %
+    % Args:
+    %     polygonCoords (Nx2 array): Array of [latitude, longitude] coordinates for the polygon.
+    %     launchPoint (1x2 array): [latitude, longitude] of the launch point.
+    %     numUAVs (int): Number of UAVs (up to 6).
+    %
+    % Returns:
+    %     partitions: Cell array of [latitude, longitude] arrays, each representing a partition polygon.
+
+    % Create the main search area polygon using polyshape
+    mainPolygon = polyshape(polygonCoords(:,1), polygonCoords(:,2));
     
-    % Calculate the centroid of the search area
-    centroid = mean(searchArea, 1);
+    % Initialize a cell array to hold each partitioned sub-polygon
+    partitions = cell(1, numUAVs);
     
-    % Calculate the angle increment for each UAV partition
-    angleIncrement = 2 * pi / numUAVs;
+    % Calculate the angle increment for each sector
+    angleIncrement = 360 / numUAVs;
     
-    % Initialize partitions cell array
-    partitions = cell(numUAVs, 1);
-    
-    % Loop to create each polygon partition
+    % Loop over each UAV to create its sector
     for i = 1:numUAVs
-        % Define the start and end angle for the current partition
-        startAngle = (i - 1) * angleIncrement;
-        endAngle = i * angleIncrement;
+        % Calculate the start and end angles for the current sector
+        angleStart = (i - 1) * angleIncrement;
+        angleEnd = i * angleIncrement;
         
-        % Initialize a partition with the centroid as the starting point
-        partition = centroid;
+        % Calculate the boundary points for the sector lines based on the angle and distance
+        distance = 0.01;  % Distance in degrees, adjust as needed for coverage
         
-        % Loop through each edge of the original polygon
-        for j = 1:size(searchArea, 1)
-            % Get the current edge vertices
-            v1 = searchArea(j, :);
-            v2 = searchArea(mod(j, size(searchArea, 1)) + 1, :);
-            
-            % Calculate angles for vertices relative to centroid
-            angle1 = atan2(v1(2) - centroid(2), v1(1) - centroid(1));
-            angle2 = atan2(v2(2) - centroid(2), v2(1) - centroid(1));
-            
-            % Normalize angles to [0, 2*pi]
-            if angle1 < 0, angle1 = angle1 + 2 * pi; end
-            if angle2 < 0, angle2 = angle2 + 2 * pi; end
-            
-            % Check if the edge intersects with the partition's angular range
-            if (startAngle <= angle1 && angle1 < endAngle) || ...
-               (startAngle <= angle2 && angle2 < endAngle) || ...
-               (angle1 < startAngle && angle2 > endAngle)
-                % Add the intersection points to the partition
-                partition = [partition; v1; v2];
-            end
-        end
+        % Compute the boundary points for the sector
+        startLat = launchPoint(1) + cosd(angleStart) * distance;
+        startLon = launchPoint(2) + sind(angleStart) * distance;
         
-        % Remove duplicate points and close the polygon
-        partition = removeDuplicatePoints(partition);
+        endLat = launchPoint(1) + cosd(angleEnd) * distance;
+        endLon = launchPoint(2) + sind(angleEnd) * distance;
         
-        % Store the cleaned partition
-        partitions{i} = partition;
+        % Create the sector as a triangle from launch point to boundary points
+        sectorPolygon = polyshape([launchPoint(1), startLat, endLat], ...
+                                  [launchPoint(2), startLon, endLon]);
+        
+        % Intersect the sector with the main polygon to get the bounded area
+        partition = intersect(mainPolygon, sectorPolygon);
+        
+        % Store the partition's vertices as a matrix
+        [lat, lon] = boundary(partition);
+        partitions{i} = [lat, lon];
     end
 end
 
-% Helper function to remove duplicate points and close the polygon if needed
-function cleanPartition = removeDuplicatePoints(partition)
-    % Remove duplicate points
-    [~, uniqueIdx] = unique(partition, 'rows', 'stable');
-    partition = partition(uniqueIdx, :);
-    
-    % Ensure the polygon is closed by adding the starting point at the end, if needed
-    if ~isequal(partition(1, :), partition(end, :))
-        partition = [partition; partition(1, :)];
-    end
-    
-    cleanPartition = partition;
+% Example usage
+polygonCoords = [39.6, -87.7; 39.55, -87.7; 39.59, -87.5; 39.6, -87.5];
+launchPoint = [39.65, -87.75];
+numUAVs = 4;
+
+% Get partitions
+partitions = splitPolygonForUAVs(polygonCoords, launchPoint, numUAVs);
+
+% Display partitions
+for i = 1:numUAVs
+    disp(['UAV ', num2str(i), ' Partition Coordinates:']);
+    disp(partitions{i});
 end
